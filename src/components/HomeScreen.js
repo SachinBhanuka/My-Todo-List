@@ -1,104 +1,208 @@
-import React from 'react';
-import { Text, View, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useState, useEffect } from 'react';
+import { Text, View, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const todos = [
-    { id: 1, text: 'Buy groceries' },
-    { id: 2, text: 'Finish homework' },
-    { id: 3, text: 'Go for a run' },
-];
+const HomeScreen = ({ navigation, route }) => {
+  const [todos, setTodos] = useState([]);
 
-const MainScreen = () => {
-    const navigation = useNavigation();
-
-    const handleAddTodoPress = () => {
-        navigation.navigate('AddTodo');
+  useEffect(() => {
+    const loadTodos = async () => {
+      try {
+        const savedTodos = await AsyncStorage.getItem('todos');
+        if (savedTodos) {
+          setTodos(JSON.parse(savedTodos));
+        }
+      } catch (error) {
+        console.error('Failed to load todos from AsyncStorage:', error);
+      }
     };
 
-    const renderTodoItem = ({ item }) => (
-        <TouchableOpacity style={styles.todoItem}>
-            <Text style={styles.todoText}>{item.text}</Text>
-        </TouchableOpacity>
-    );
+    loadTodos();
+  }, []);
 
-    return (
-        <View style={styles.container}>
-            <Text style={styles.title}>My Todo List</Text>
-            <View style={styles.line} />
-            <FlatList
-                data={todos}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={renderTodoItem}
-            />
-            <TouchableOpacity style={styles.addButton} onPress={handleAddTodoPress}>
-                <View style={styles.addButtonCircle}>
-                    <Text style={styles.addButtonTitle}>+</Text>
-                </View>
-                <Text style={styles.addButtonLabel}>Add New Todo</Text>
-            </TouchableOpacity>
-        </View>
+  useEffect(() => {
+    const saveTodos = async () => {
+      try {
+        await AsyncStorage.setItem('todos', JSON.stringify(todos));
+      } catch (error) {
+        console.error('Failed to save todos to AsyncStorage:', error);
+      }
+    };
+
+    saveTodos();
+  }, [todos]);
+
+  useEffect(() => {
+    if (route.params?.newTodo) {
+      // Update todos state with the new todo item
+      setTodos((prevTodos) => [...prevTodos, route.params.newTodo]);
+      
+      // Navigate back to the AddTodo screen
+      navigation.navigate('AddTodo');
+    }
+  }, [route.params?.newTodo]);
+  
+
+  const toggleExpand = (todoId) => {
+    setTodos((prevTodos) =>
+      prevTodos.map((todo) =>
+        todo.id === todoId ? { ...todo, expanded: !todo.expanded } : todo
+      )
     );
+  };
+
+  const markTodoAsFinished = (todoId) => {
+    setTodos((prevTodos) =>
+      prevTodos.map((todo) =>
+        todo.id === todoId ? { ...todo, finished: !todo.finished } : todo
+      )
+    );
+  };
+
+  const deleteTodo = (todoId) => {
+    Alert.alert(
+      'Delete Todo',
+      'Are you sure you want to delete this todo?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          onPress: () =>
+            setTodos((prevTodos) =>
+              prevTodos.filter((todo) => todo.id !== todoId)
+            ),
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const renderTodoItem = ({ item }) => (
+    <View>
+      <TouchableOpacity onPress={() => toggleExpand(item.id)} style={styles.todoItem}>
+        <Text style={styles.todoText}>{item.title}</Text>
+        <TouchableOpacity onPress={() => toggleExpand(item.id)}>
+          <Ionicons
+            name={item.expanded ? 'caret-up' : 'caret-down'}
+            size={30}
+            color="black"
+          />
+        </TouchableOpacity>
+      </TouchableOpacity>
+      {item.expanded && (
+        <View style={styles.expandedContent}>
+          <Text style={styles.description}>{item.description}</Text>
+          <View style={styles.controlPanel}>
+            {!item.finished && (
+              <TouchableOpacity onPress={() => markTodoAsFinished(item.id)}>
+                <Ionicons name="checkmark-circle-outline" size={24} color="green" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={() => deleteTodo(item.id)}>
+              <Ionicons name="trash-outline" size={24} color="red" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>My Todo List</Text>
+      <FlatList
+        data={todos}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={renderTodoItem}
+        style={styles.flatList}
+      />
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => navigation.navigate('AddTodo')}
+      >
+        <View style={styles.addButtonCircle}>
+          <Text style={styles.addButtonLabel}>+</Text>
+        </View>
+        <Text style={styles.addButtonLabelText}>Add New Todo</Text>
+      </TouchableOpacity>
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 20,
-        justifyContent: 'space-between',
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 10,
-    },
-    line: {
-        width: '100%',
-        height: 1,
-        backgroundColor: '#ccc',
-        marginBottom: 10,
-    },
-    todoItem: {
-        backgroundColor: '#0D98BA',
-        padding: 10,
-        marginBottom: 10,
-        borderRadius: 5,
-    },
-    todoText: {
-        fontSize: 16,
-    },
-    addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#00f',
-        padding: 10,
-        borderRadius: 5,
-        marginBottom: 20,
-        position: 'absolute',
-        bottom: 20,
-        left: 20,
-        right: 20,
-    },
-    addButtonCircle: {
-        backgroundColor: '#0f0',
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 10,
-    },
-    addButtonTitle: {
-        color: '#fff',
-        fontSize: 24,
-        fontWeight: 'bold',
-    },
-    addButtonLabel: {
-        fontSize: 16,
-        color: '#fff',
-        textAlignVertical: 'center',
-    },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  flatList: {
+    marginTop: 10,
+  },
+  todoItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ccc',
+  },
+  todoText: {
+    fontSize: 16,
+    flex: 1,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#00f',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 20,
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+  },
+  addButtonCircle: {
+    backgroundColor: '#0f0',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  addButtonLabel: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  addButtonLabelText: {
+    fontSize: 24,
+    color: '#fff',
+    textAlignVertical: 'center',
+  },
+  expandedContent: {
+    padding: 10,
+    backgroundColor: '#f9f9f9',
+  },
+  description: {
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  controlPanel: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
 });
 
-export default MainScreen;
+export default HomeScreen;
